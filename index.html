@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S.H.A.R.K Engine - Algorithm Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .slider-custom { accent-color: #06b6d4; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 min-h-screen p-6">
+
+    <header class="mb-8 border-b border-slate-700 pb-4">
+        <h1 class="text-3xl font-bold text-cyan-400">S.H.A.R.K Engine Dashboard</h1>
+        <p class="text-sm text-slate-400">Submarine Hover & Attitude Response Kinematics | Developed by Antonius Andrian</p>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <div class="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
+            <h2 class="text-xl font-semibold mb-4 text-emerald-400">Parameter Kontrol</h2>
+            
+            <div class="mb-4">
+                <label class="block text-sm mb-1">Filter Alpha (α): <span id="valAlpha">0.96</span></label>
+                <input type="range" id="alpha" min="0.5" max="0.99" step="0.01" value="0.96" class="w-full slider-custom">
+                <p class="text-xs text-slate-400 mt-1">Mengatur rasio kepercayaan ke Gyroscope vs Accelerometer.</p>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm mb-1">Proportional (Kp): <span id="valKp">1.75</span></label>
+                <input type="range" id="kp" min="0" max="5" step="0.05" value="1.75" class="w-full slider-custom">
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm mb-1">Integral (Ki): <span id="valKi">0.10</span></label>
+                <input type="range" id="ki" min="0" max="1" step="0.01" value="0.10" class="w-full slider-custom">
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-sm mb-1">Derivative (Kd): <span id="valKd">0.05</span></label>
+                <input type="range" id="kd" min="0" max="1" step="0.01" value="0.05" class="w-full slider-custom">
+            </div>
+
+            <button onclick="triggerDisturbance()" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-4 rounded transition">
+                ⚠️ Berikan Gangguan (Arus Air 15°)
+            </button>
+            <p class="text-xs text-slate-400 mt-3 text-center">Mensimulasikan ROV terdorong arus air.</p>
+        </div>
+
+        <div class="lg:col-span-2 flex flex-col gap-6">
+            
+            <div class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 relative">
+                <h3 class="text-lg font-semibold mb-2 text-cyan-300">1. Complementary Filter (Pengolahan Noise)</h3>
+                <div class="h-48">
+                    <canvas id="filterChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 relative">
+                <h3 class="text-lg font-semibold mb-2 text-emerald-300">2. PID Response & Motor Output</h3>
+                <div class="h-48">
+                    <canvas id="pidChart"></canvas>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // --- Setup Variabel Simulasi ---
+        let time = 0;
+        const dt = 0.05; // 50ms loop time
+        
+        // Physics state
+        let actualPitch = 0; 
+        let angularVelocity = 0;
+        
+        // S.H.A.R.K Engine state
+        let currentAngle = 0;
+        let integral = 0;
+        let prevError = 0;
+        
+        // --- Setup Chart.js ---
+        const maxDataPoints = 100;
+        const createChart = (ctx, title, datasets) => {
+            return new Chart(ctx, {
+                type: 'line',
+                data: { labels: Array(maxDataPoints).fill(''), datasets: datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    elements: { point: { radius: 0 }, line: { borderWidth: 2 } },
+                    scales: {
+                        x: { display: false },
+                        y: { grid: { color: '#334155' } }
+                    },
+                    plugins: { legend: { labels: { color: '#cbd5e1' } } }
+                }
+            });
+        };
+
+        const filterChart = createChart(document.getElementById('filterChart'), 'Filter', [
+            { label: 'Raw Accelerometer (Noisy)', borderColor: 'rgba(239, 68, 68, 0.5)', data: Array(maxDataPoints).fill(0) },
+            { label: 'Raw Gyroscope (Drift)', borderColor: 'rgba(234, 179, 8, 0.5)', data: Array(maxDataPoints).fill(0) },
+            { label: 'S.H.A.R.K Filtered Angle', borderColor: '#22d3ee', data: Array(maxDataPoints).fill(0), borderWidth: 3 }
+        ]);
+
+        const pidChart = createChart(document.getElementById('pidChart'), 'PID', [
+            { label: 'Actual ROV Angle', borderColor: '#22d3ee', data: Array(maxDataPoints).fill(0) },
+            { label: 'Motor Output Correction', borderColor: '#10b981', data: Array(maxDataPoints).fill(0) },
+            { label: 'Setpoint (0°)', borderColor: '#94a3b8', borderDash: [5, 5], data: Array(maxDataPoints).fill(0) }
+        ]);
+
+        // --- Fungsi Trigger Gangguan ---
+        function triggerDisturbance() {
+            actualPitch = 15; // Set kemiringan fisik tiba-tiba ke 15 derajat
+            angularVelocity = 0;
+        }
+
+        // --- UI Listeners ---
+        const getVal = (id) => parseFloat(document.getElementById(id).value);
+        ['alpha', 'kp', 'ki', 'kd'].forEach(id => {
+            document.getElementById(id).addEventListener('input', (e) => {
+                document.getElementById('val' + id.charAt(0).toUpperCase() + id.slice(1)).innerText = e.target.value;
+            });
+        });
+
+        // --- Main Simulation Loop (Meniru ESP32) ---
+        let simulatedGyroDrift = 0;
+
+        setInterval(() => {
+            // Ambil parameter dari slider
+            const alpha = getVal('alpha');
+            const kp = getVal('kp');
+            const ki = getVal('ki');
+            const kd = getVal('kd');
+
+            // 1. Simulasikan pembacaan sensor fisik
+            simulatedGyroDrift += 0.05; // Gyro perlahan menyimpang
+            let rawAccel = actualPitch + (Math.random() * 4 - 2); // Noise getaran motor +- 2 derajat
+            let rawGyroRate = angularVelocity + 0.5; // Ada sedikit offset pembacaan
+
+            // 2. Tahap Fusi Sensor (S.H.A.R.K Engine)
+            currentAngle = alpha * (currentAngle + rawGyroRate * dt) + (1.0 - alpha) * rawAccel;
+
+            // 3. Tahap Komputasi PID
+            let error = 0 - currentAngle; // Setpoint adalah 0
+            integral += error * dt;
+            // Anti-Windup
+            if (integral > 400) integral = 400;
+            if (integral < -400) integral = -400;
+            
+            let derivative = (error - prevError) / dt;
+            prevError = error;
+            
+            let motorOutput = (kp * error) + (ki * integral) + (kd * derivative);
+
+            // 4. Update Fisika Lingkungan Bawah Air
+            // Output motor memberi percepatan sudut, air memberikan gaya hambat (damping)
+            let angularAccel = motorOutput * 1.5; 
+            angularVelocity += angularAccel * dt;
+            angularVelocity *= 0.90; // Gaya redaman viskositas air yang berat
+            actualPitch += angularVelocity * dt;
+
+            // 5. Update Grafik
+            updateChartData(filterChart, [rawAccel, actualPitch + simulatedGyroDrift, currentAngle]);
+            updateChartData(pidChart, [actualPitch, motorOutput, 0]);
+
+        }, dt * 1000); // Jalan setiap 50ms
+
+        function updateChartData(chart, newValues) {
+            chart.data.datasets.forEach((dataset, i) => {
+                dataset.data.push(newValues[i]);
+                dataset.data.shift();
+            });
+            chart.update();
+        }
+    </script>
+</body>
+</html>
