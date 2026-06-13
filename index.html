@@ -1,298 +1,266 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-
-<title>S.H.A.R.K Engine Visualizer</title>
-
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<style>
-body{
-background:#0f172a;
-color:white;
-}
-
-.motor{
-width:90px;
-height:90px;
-border-radius:50%;
-display:flex;
-align-items:center;
-justify-content:center;
-font-weight:bold;
-transition:all .2s;
-}
-
-.motor-active{
-transform:scale(1.15);
-box-shadow:0 0 25px cyan;
-}
-
-.pipeline-box{
-padding:12px;
-border-radius:12px;
-background:#1e293b;
-border:1px solid #334155;
-text-align:center;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>S.H.A.R.K Engine Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background: #0f172a; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .motor {
+            width: 80px; height: 80px; border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; font-weight: bold;
+            transition: all 0.1s ease-out; background: #334155; border: 2px solid #475569;
+        }
+        .motor-active-up { transform: scale(1.15); box-shadow: 0 0 20px #0ea5e9; border-color: #0ea5e9; background: #0284c7; }
+        .motor-active-down { transform: scale(1.15); box-shadow: 0 0 20px #eab308; border-color: #eab308; background: #ca8a04; }
+        .pipeline-box { padding: 12px; border-radius: 12px; background: #1e293b; border: 1px solid #334155; text-align: center; font-weight: 600; font-size: 0.9rem;}
+        canvas { max-height: 250px; }
+    </style>
 </head>
-
 <body class="p-6">
 
 <div class="max-w-7xl mx-auto">
 
-<h1 class="text-4xl font-bold text-cyan-400">
-S.H.A.R.K Engine
-</h1>
+    <div class="flex justify-between items-end border-b border-slate-700 pb-4 mb-6">
+        <div>
+            <h1 class="text-4xl font-bold text-cyan-400">S.H.A.R.K Engine</h1>
+            <p class="text-slate-400 mt-2">Submarine Hover & Attitude Response Kinematics</p>
+        </div>
+        <div class="text-right text-sm text-slate-500">
+            <p>Developed by Antonius Andrian</p>
+            <p>Weight: 5.2 KG | Max Depth: 1.2 M</p>
+        </div>
+    </div>
 
-<p class="text-slate-400 mt-2">
-Submarine Hover & Attitude Response Kinematics
-</p>
+    <div class="bg-slate-800 rounded-xl p-6 mb-6 shadow-lg border border-slate-700">
+        <h2 class="text-2xl text-cyan-300 font-bold mb-3">Cara Kerja Sistem</h2>
+        <p class="text-slate-300 text-sm leading-relaxed mb-4">
+            S.H.A.R.K Engine adalah algoritma kontrol penerbangan (flight controller) khusus ROV bawah air. Sistem ini menyelesaikan dua masalah utama:
+        </p>
+        <ul class="list-disc list-inside text-sm text-slate-400 space-y-2">
+            <li><strong class="text-slate-200">Sensor Fusion:</strong> Menggunakan <em>Complementary Filter</em> untuk menyaring noise getaran dari Accelerometer dan mengkoreksi drift waktu dari Gyroscope MPU6500.</li>
+            <li><strong class="text-slate-200">Attitude Stabilization:</strong> Menggunakan sistem kendali loop tertutup (PID Controller) untuk mengkalkulasi error sudut murni, lalu mendistribusikan sinyal koreksi ke 5 motor thruster (Thruster Mixing) agar ROV tetap stabil di tengah arus air.</li>
+        </ul>
+    </div>
 
-<hr class="my-6 border-slate-700">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-6 mb-8">
+        <div class="pipeline-box text-blue-300">1. MPU6500<br><span class="text-xs font-normal text-slate-400">Raw Data</span></div>
+        <div class="pipeline-box text-cyan-300">2. Complementary Filter<br><span class="text-xs font-normal text-slate-400">Sensor Fusion</span></div>
+        <div class="pipeline-box text-emerald-300">3. PID Controller<br><span class="text-xs font-normal text-slate-400">Error Calculation</span></div>
+        <div class="pipeline-box text-yellow-300">4. Thruster Mixing<br><span class="text-xs font-normal text-slate-400">Matrix Distribution</span></div>
+        <div class="pipeline-box text-pink-300">5. ESC Output<br><span class="text-xs font-normal text-slate-400">Motor Action</span></div>
+    </div>
 
-<div class="bg-slate-800 rounded-xl p-5">
+    <div class="bg-slate-800 rounded-xl p-5 mb-6 flex flex-wrap gap-4 items-center justify-center border border-slate-700 shadow-lg">
+        <button id="btnStart" onclick="startSim()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded font-bold transition">▶ Start</button>
+        <button id="btnStop" onclick="stopSim()" class="bg-slate-600 hover:bg-slate-500 text-white px-6 py-2 rounded font-bold transition" disabled>⏸ Stop</button>
+        <button onclick="resetSim()" class="bg-amber-600 hover:bg-amber-500 text-white px-6 py-2 rounded font-bold transition">🔄 Reset</button>
+        <div class="w-px h-8 bg-slate-600 mx-2"></div>
+        <button onclick="triggerDisturbance()" class="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded font-bold transition shadow-[0_0_15px_rgba(220,38,38,0.5)]">🌊 Simulasi Arus Air (+15°)</button>
+    </div>
 
-<h2 class="text-2xl text-cyan-300 font-bold mb-4">
-Apa itu Shark Engine?
-</h2>
+    <div class="grid lg:grid-cols-2 gap-6 mt-6">
+        <div class="bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-lg">
+            <h3 class="text-xl mb-1 text-cyan-300 font-semibold">1. Sensor Fusion (Pitch)</h3>
+            <p class="text-xs text-slate-400 mb-4">Menggabungkan Raw Accel & Gyro menjadi Sudut Murni.</p>
+            <canvas id="fusionChart"></canvas>
+        </div>
+        <div class="bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-lg">
+            <h3 class="text-xl mb-1 text-emerald-300 font-semibold">2. PID Stabilization</h3>
+            <p class="text-xs text-slate-400 mb-4">Merespons error untuk mengembalikan ROV ke 0°.</p>
+            <canvas id="pidChart"></canvas>
+        </div>
+    </div>
 
-<p>
-Shark Engine merupakan framework kontrol ROV yang
-menggabungkan Sensor Fusion, Attitude Stabilization,
-Thruster Mixing dan Hardware Direction Compensation
-ke dalam satu sistem kontrol terpadu.
-</p>
-
-</div>
-
-<div class="grid lg:grid-cols-5 gap-4 mt-6">
-
-<div class="pipeline-box">
-MPU6050
-</div>
-
-<div class="pipeline-box">
-Shark Fusion
-</div>
-
-<div class="pipeline-box">
-Stabilizer
-</div>
-
-<div class="pipeline-box">
-Thruster Mixer
-</div>
-
-<div class="pipeline-box">
-Motor Output
-</div>
-
-</div>
-
-<div class="grid lg:grid-cols-2 gap-6 mt-6">
-
-<div class="bg-slate-800 rounded-xl p-4">
-
-<h3 class="text-xl mb-3 text-cyan-300">
-Sensor Fusion
-</h3>
-
-<canvas id="fusionChart"></canvas>
-
-</div>
-
-<div class="bg-slate-800 rounded-xl p-4">
-
-<h3 class="text-xl mb-3 text-emerald-300">
-Stabilization
-</h3>
-
-<canvas id="pidChart"></canvas>
-
-</div>
-
-</div>
-
-<div class="bg-slate-800 rounded-xl p-6 mt-6">
-
-<h2 class="text-2xl font-bold text-yellow-400 mb-4">
-5 Thruster Mixer
-</h2>
-
-<div class="flex justify-center mb-5">
-
-<button onclick="disturb()"
-class="bg-red-600 px-6 py-3 rounded">
-Simulasi Arus Air +15°
-</button>
-
-</div>
-
-<div class="grid grid-cols-3 gap-4 max-w-lg mx-auto">
-
-<div></div>
-<div id="m5" class="motor bg-slate-700">M5</div>
-<div></div>
-
-<div id="m4" class="motor bg-slate-700">M4</div>
-<div></div>
-<div id="m3" class="motor bg-slate-700">M3</div>
-
-<div id="m1" class="motor bg-slate-700">M1</div>
-<div></div>
-<div id="m2" class="motor bg-slate-700">M2</div>
-
-</div>
-
-</div>
-
-<div class="bg-slate-800 rounded-xl p-6 mt-6">
-
-<h2 class="text-2xl font-bold text-pink-400 mb-4">
-Perbandingan
-</h2>
-
-<table class="w-full">
-
-<tr>
-<th>Fitur</th>
-<th>PID</th>
-<th>Comp Filter</th>
-<th>Shark</th>
-</tr>
-
-<tr>
-<td>Sensor Fusion</td>
-<td>❌</td>
-<td>✅</td>
-<td>✅</td>
-</tr>
-
-<tr>
-<td>Stabilization</td>
-<td>✅</td>
-<td>❌</td>
-<td>✅</td>
-</tr>
-
-<tr>
-<td>Thruster Mixing</td>
-<td>❌</td>
-<td>❌</td>
-<td>✅</td>
-</tr>
-
-<tr>
-<td>Direction Compensation</td>
-<td>❌</td>
-<td>❌</td>
-<td>✅</td>
-</tr>
-
-<tr>
-<td>5 Thruster ROV</td>
-<td>❌</td>
-<td>❌</td>
-<td>✅</td>
-</tr>
-
-</table>
-
-</div>
+    <div class="bg-slate-800 rounded-xl p-6 mt-6 border border-slate-700 shadow-lg">
+        <h2 class="text-2xl font-bold text-yellow-400 mb-2 text-center">Simulasi Reaksi 5 Thruster</h2>
+        <p class="text-xs text-slate-400 mb-6 text-center">Visualisasi kompensasi motor saat ROV miring (Pitch correction).</p>
+        
+        <div class="grid grid-cols-3 gap-6 max-w-sm mx-auto items-center justify-items-center">
+            <div id="m1" class="motor text-slate-300">M1<br><span class="text-[10px] font-normal">Depan Kiri</span></div>
+            <div class="text-slate-500 text-xs text-center">Depan<br>⬆️</div>
+            <div id="m2" class="motor text-slate-300">M2<br><span class="text-[10px] font-normal">Depan Kanan</span></div>
+            
+            <div id="m3" class="motor text-slate-500 opacity-50">M3<br><span class="text-[10px] font-normal">Kiri</span></div>
+            <div class="text-slate-500 text-xs text-center w-full h-full flex items-center justify-center border border-dashed border-slate-600 rounded">Body<br>ROV</div>
+            <div id="m4" class="motor text-slate-500 opacity-50">M4<br><span class="text-[10px] font-normal">Kanan</span></div>
+            
+            <div></div>
+            <div id="m5" class="motor text-slate-300">M5<br><span class="text-[10px] font-normal">Belakang</span></div>
+            <div></div>
+        </div>
+        <div class="flex justify-center gap-6 mt-6 text-sm">
+            <span class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-[#0284c7]"></div> Dorong Ke Atas</span>
+            <span class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-[#ca8a04]"></div> Dorong Ke Bawah</span>
+        </div>
+    </div>
 
 </div>
 
 <script>
+    // --- KONFIGURASI SIMULASI FISIKA & PID ---
+    const dt = 0.05; // 50ms loop
+    const alpha = 0.98;
+    const Kp = 2.5, Ki = 0.5, Kd = 1.2;
+    
+    // Variabel State
+    let simulationRunning = false;
+    let intervalId = null;
+    let timeAxis = 0;
+    
+    // Fisika ROV
+    let actualPitch = 0; 
+    let angularVelocity = 0;
+    let simulatedGyroDrift = 0;
+    
+    // PID State
+    let currentAngle = 0;
+    let integral = 0;
+    let prevError = 0;
 
-let angle = 0;
+    // --- SETUP CHART.JS ---
+    const maxDataPoints = 100;
+    const commonOptions = {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        elements: { point: { radius: 0 }, line: { borderWidth: 2, tension: 0.1 } },
+        scales: { x: { display: false }, y: { grid: { color: '#334155' } } },
+        plugins: { legend: { labels: { color: '#cbd5e1', boxWidth: 12 } } }
+    };
 
-function disturb(){
-angle = 15;
-}
+    const fusionChart = new Chart(document.getElementById('fusionChart'), {
+        type: 'line',
+        data: {
+            labels: Array(maxDataPoints).fill(''),
+            datasets: [
+                { label: 'Raw Accel (Noisy)', borderColor: 'rgba(239, 68, 68, 0.4)', data: Array(maxDataPoints).fill(0) },
+                { label: 'Shark Filter (Murni)', borderColor: '#22d3ee', data: Array(maxDataPoints).fill(0), borderWidth: 3 }
+            ]
+        },
+        options: commonOptions
+    });
 
-const fusionChart = new Chart(
-document.getElementById('fusionChart'),
-{
-type:'line',
-data:{
-labels:[],
-datasets:[
-{
-label:'Accelerometer',
-data:[]
-},
-{
-label:'Shark Angle',
-data:[]
-}
-]
-}
-}
-);
+    const pidChart = new Chart(document.getElementById('pidChart'), {
+        type: 'line',
+        data: {
+            labels: Array(maxDataPoints).fill(''),
+            datasets: [
+                { label: 'Actual Angle', borderColor: '#22d3ee', data: Array(maxDataPoints).fill(0) },
+                { label: 'PID Output (Correction)', borderColor: '#10b981', data: Array(maxDataPoints).fill(0) },
+                { label: 'Setpoint', borderColor: '#94a3b8', borderDash: [5, 5], data: Array(maxDataPoints).fill(0), borderWidth: 1 }
+            ]
+        },
+        options: commonOptions
+    });
 
-const pidChart = new Chart(
-document.getElementById('pidChart'),
-{
-type:'line',
-data:{
-labels:[],
-datasets:[
-{
-label:'Actual Angle',
-data:[]
-},
-{
-label:'Correction',
-data:[]
-}
-]
-}
-}
-);
+    // --- FUNGSI KONTROL UI ---
+    function triggerDisturbance() {
+        actualPitch = 15; // Set kemiringan fisik 15 derajat
+        angularVelocity = 0;
+        if (!simulationRunning) startSim(); // Otomatis mulai jika sedang stop
+    }
 
-setInterval(()=>{
+    function startSim() {
+        if (simulationRunning) return;
+        simulationRunning = true;
+        document.getElementById('btnStart').disabled = true;
+        document.getElementById('btnStart').classList.add('opacity-50');
+        document.getElementById('btnStop').disabled = false;
+        document.getElementById('btnStop').classList.remove('opacity-50');
+        intervalId = setInterval(physicsLoop, dt * 1000);
+    }
 
-angle*=0.95;
+    function stopSim() {
+        simulationRunning = false;
+        clearInterval(intervalId);
+        document.getElementById('btnStart').disabled = false;
+        document.getElementById('btnStart').classList.remove('opacity-50');
+        document.getElementById('btnStop').disabled = true;
+        document.getElementById('btnStop').classList.add('opacity-50');
+    }
 
-let correction=-angle*2;
+    function resetSim() {
+        stopSim();
+        actualPitch = 0; angularVelocity = 0; simulatedGyroDrift = 0;
+        currentAngle = 0; integral = 0; prevError = 0; timeAxis = 0;
+        
+        // Reset grafik
+        fusionChart.data.datasets.forEach(d => d.data = Array(maxDataPoints).fill(0));
+        pidChart.data.datasets.forEach(d => d.data = Array(maxDataPoints).fill(0));
+        fusionChart.update(); pidChart.update();
+        
+        // Reset Visual Motor
+        ['m1', 'm2', 'm5'].forEach(id => {
+            document.getElementById(id).className = 'motor text-slate-300';
+        });
+    }
 
-['m1','m2'].forEach(id=>{
-document.getElementById(id)
-.classList.toggle('motor-active',angle>2);
-});
+    // --- CORE ALGORITHM (S.H.A.R.K ENGINE MATH) ---
+    function physicsLoop() {
+        timeAxis += dt;
 
-document.getElementById('m5')
-.classList.toggle('motor-active',angle>2);
+        // 1. Baca Sensor (Dengan Noise & Drift)
+        simulatedGyroDrift += 0.05;
+        let rawAccel = actualPitch + (Math.random() * 5 - 2.5); // Noise getaran
+        let rawGyroRate = angularVelocity;
 
-fusionChart.data.labels.push('');
-fusionChart.data.datasets[0].data.push(angle+(Math.random()*4-2));
-fusionChart.data.datasets[1].data.push(angle);
+        // 2. Complementary Filter
+        currentAngle = alpha * (currentAngle + rawGyroRate * dt) + (1.0 - alpha) * rawAccel;
 
-if(fusionChart.data.labels.length>50){
-fusionChart.data.labels.shift();
-fusionChart.data.datasets.forEach(d=>d.data.shift());
-}
+        // 3. PID Controller
+        let error = 0 - currentAngle; 
+        integral += error * dt;
+        integral = Math.max(-400, Math.min(400, integral)); // Anti-Windup
+        let derivative = (error - prevError) / dt;
+        prevError = error;
+        
+        let motorOutput = (Kp * error) + (Ki * integral) + (Kd * derivative);
 
-fusionChart.update();
+        // 4. Update Fisika Lingkungan Air
+        let angularAccel = motorOutput * 1.5; 
+        angularVelocity += angularAccel * dt;
+        angularVelocity *= 0.88; // Gaya redaman air (Damping)
+        actualPitch += angularVelocity * dt;
 
-pidChart.data.labels.push('');
-pidChart.data.datasets[0].data.push(angle);
-pidChart.data.datasets[1].data.push(correction);
+        // 5. Update Grafik
+        fusionChart.data.datasets[0].data.push(rawAccel);
+        fusionChart.data.datasets[1].data.push(currentAngle);
+        fusionChart.data.datasets.forEach(d => d.data.shift());
+        fusionChart.update();
 
-if(pidChart.data.labels.length>50){
-pidChart.data.labels.shift();
-pidChart.data.datasets.forEach(d=>d.data.shift());
-}
+        pidChart.data.datasets[0].data.push(actualPitch);
+        pidChart.data.datasets[1].data.push(motorOutput);
+        pidChart.data.datasets[2].data.push(0);
+        pidChart.data.datasets.forEach(d => d.data.shift());
+        pidChart.update();
 
-pidChart.update();
+        // 6. Update Visual Motor Thruster
+        updateMotorVisuals(motorOutput);
+    }
 
-},100);
+    function updateMotorVisuals(output) {
+        // Jika output positif (artinya ROV mendongak ke atas, butuh koreksi ke bawah)
+        // M1 & M2 (Depan) harus mendorong ke atas, M5 (Belakang) mendorong ke bawah
+        
+        const threshold = 1.5; // Batas minimal visualisasi menyala
+        const m1m2 = document.querySelectorAll('#m1, #m2');
+        const m5 = document.getElementById('m5');
 
+        m1m2.forEach(el => el.className = 'motor text-slate-300');
+        m5.className = 'motor text-slate-300';
+
+        if (output > threshold) {
+            m1m2.forEach(el => el.classList.add('motor-active-up'));
+            m5.classList.add('motor-active-down');
+        } else if (output < -threshold) {
+            m1m2.forEach(el => el.classList.add('motor-active-down'));
+            m5.classList.add('motor-active-up');
+        }
+    }
+
+    // Auto-start saat halaman dimuat
+    startSim();
 </script>
 
 </body>
